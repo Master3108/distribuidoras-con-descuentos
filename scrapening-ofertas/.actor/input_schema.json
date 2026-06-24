@@ -1,0 +1,32 @@
+{
+  "title": "scrapening-ofertas Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "cuentas": {
+      "title": "Cuentas conocidas por plataforma",
+      "type": "object",
+      "description": "Handles a monitorear por plataforma",
+      "editor": "json",
+      "default": {
+        "tiktok": ["matsi_matsi"],
+        "instagram": ["matsi_matsi"],
+        "youtube": [],
+        "facebook": []
+      }
+    },
+    "maxResultsPerSource": {
+      "title": "Máximo de resultados por fuente",
+      "type": "integer",
+      "default": 20,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "youtubeApiKey": {
+      "title": "YouTube Data API v3 Key",
+      "type": "string",
+      "isSecret": true
+    }
+  },
+  "required": []
+}

@@ -1,0 +1,12 @@
+{
+  "actorSpecification": 1,
+  "name": "scrapening-ofertas",
+  "title": "Scrapening Ofertas RM Chile",
+  "description": "Monitorea TikTok, Instagram, YouTube y Facebook buscando datazos de distribuidoras y supermercados en la RM de Chile",
+  "version": "1.0",
+  "buildTag": "latest",
+  "environmentVariables": [
+    { "name": "YOUTUBE_API_KEY", "isSecret": true }
+  ],
+  "dockerfile": "./Dockerfile"
+}

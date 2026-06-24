@@ -1,0 +1,22 @@
+{
+  "name": "scrapening-ofertas",
+  "version": "1.0.0",
+  "description": "Scraper de datazos de distribuidoras RM Chile",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "jest --experimental-vm-modules",
+    "dev": "apify run"
+  },
+  "dependencies": {
+    "apify": "^3.0.0",
+    "crawlee": "^3.0.0",
+    "playwright": "^1.40.0",
+    "googleapis": "^140.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
