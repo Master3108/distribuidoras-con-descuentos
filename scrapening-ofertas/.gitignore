@@ -4,3 +4,5 @@ node_modules/
 .actor/actor_temp/
 .DS_Store
 dist/
+state.json
+meta.json

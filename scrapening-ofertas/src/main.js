@@ -1,20 +1,19 @@
-// src/main.js
-import { Actor, Dataset } from 'apify';
+import 'dotenv/config';
 import { DEFAULT_HASHTAGS, SUPERMARKETS_ACCOUNTS, PLATFORMS } from './config.js';
 import { loadProcessedIds, saveProcessedIds, isNew, markProcessed } from './dedup.js';
+import { pushVideo } from './storage.js';
 import { scrapeYoutubeByKeyword, scrapeYoutubeByChannel } from './scrapers/youtube.js';
 import { scrapeTikTokAccount, scrapeTikTokHashtag } from './scrapers/tiktok.js';
 import { scrapeInstagramAccount, scrapeInstagramHashtag } from './scrapers/instagram.js';
 import { scrapeFacebookPage, scrapeFacebookKeyword } from './scrapers/facebook.js';
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
 
-await Actor.init();
+const META_FILE = join(process.cwd(), 'meta.json');
 
-const input = await Actor.getInput() || {};
-const {
-    cuentas = {},
-    maxResultsPerSource = 20,
-    youtubeApiKey = process.env.YOUTUBE_API_KEY,
-} = input;
+const cuentas = JSON.parse(process.env.CUENTAS || '{}');
+const maxResultsPerSource = parseInt(process.env.MAX_RESULTS_PER_SOURCE || '20', 10);
+const youtubeApiKey = process.env.YOUTUBE_API_KEY;
 
 // Merge cuentas del input con cuentas de supermercados
 const allCuentas = {};
@@ -28,14 +27,19 @@ for (const platform of PLATFORMS) {
 let processedIds = await loadProcessedIds();
 let newItemsCount = 0;
 
-// Load and update last run timestamp for YouTube date filtering
-const metaStore = await Actor.openKeyValueStore('scrapening-meta');
-const lastRunDate = await metaStore.getValue('last_run_date');
+// Cargar y actualizar timestamp de último run para filtrado de YouTube
+let lastRunDate = null;
+try {
+    const meta = JSON.parse(await readFile(META_FILE, 'utf-8'));
+    lastRunDate = meta.last_run_date || null;
+} catch {
+    // primera ejecución
+}
 
 async function pushIfNew(item) {
     if (!item.id) return;
     if (!isNew(processedIds, item.plataforma, item.id)) return;
-    await Dataset.pushData(item);
+    await pushVideo(item);
     processedIds = markProcessed(processedIds, item.plataforma, item.id);
     newItemsCount++;
 }
@@ -84,16 +88,6 @@ for (const hashtag of DEFAULT_HASHTAGS.instagram) {
 
 // ── YouTube ──────────────────────────────────────────
 if (youtubeApiKey) {
-    console.log('Scraping YouTube keywords...');
-    for (const keyword of DEFAULT_HASHTAGS.youtube) {
-        try {
-            const items = await scrapeYoutubeByKeyword(youtubeApiKey, keyword, maxResultsPerSource, lastRunDate);
-            for (const item of items) await pushIfNew(item);
-        } catch (e) {
-            console.error(`YouTube keyword "${keyword}" error:`, e.message);
-        }
-    }
-
     console.log('Scraping YouTube canales...');
     for (const channel of allCuentas.youtube || []) {
         try {
@@ -101,6 +95,16 @@ if (youtubeApiKey) {
             for (const item of items) await pushIfNew(item);
         } catch (e) {
             console.error(`YouTube canal "${channel}" error:`, e.message);
+        }
+    }
+
+    console.log('Scraping YouTube keywords...');
+    for (const keyword of DEFAULT_HASHTAGS.youtube) {
+        try {
+            const items = await scrapeYoutubeByKeyword(youtubeApiKey, keyword, maxResultsPerSource, lastRunDate);
+            for (const item of items) await pushIfNew(item);
+        } catch (e) {
+            console.error(`YouTube keyword "${keyword}" error:`, e.message);
         }
     }
 } else {
@@ -128,9 +132,8 @@ for (const keyword of DEFAULT_HASHTAGS.facebook) {
     }
 }
 
-// ── Guardar IDs procesados ───────────────────────────
+// ── Guardar estado ────────────────────────────────────
 await saveProcessedIds(processedIds);
-await metaStore.setValue('last_run_date', new Date().toISOString());
-console.log(`✅ scrapening-ofertas completado. ${newItemsCount} nuevos items encontrados.`);
+await writeFile(META_FILE, JSON.stringify({ last_run_date: new Date().toISOString() }, null, 2), 'utf-8');
 
-await Actor.exit();
+console.log(`✅ scrapening-ofertas completado. ${newItemsCount} nuevos items encontrados.`);
