@@ -1,7 +1,8 @@
-import { Actor } from 'apify';
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
 import { MAX_IDS_PER_PLATFORM } from './config.js';
 
-const STORE_KEY = 'processed_ids';
+const STATE_FILE = join(process.cwd(), 'state.json');
 
 export function isNew(processedIds, platform, id) {
     return !processedIds[platform]?.includes(id);
@@ -20,15 +21,18 @@ export function trimIds(ids, max) {
 }
 
 export async function loadProcessedIds() {
-    const store = await Actor.openKeyValueStore();
-    return (await store.getValue(STORE_KEY)) || {};
+    try {
+        const data = await readFile(STATE_FILE, 'utf-8');
+        return JSON.parse(data);
+    } catch {
+        return {};
+    }
 }
 
 export async function saveProcessedIds(ids) {
-    const store = await Actor.openKeyValueStore();
     const trimmed = {};
     for (const [platform, platformIds] of Object.entries(ids)) {
         trimmed[platform] = trimIds(platformIds, MAX_IDS_PER_PLATFORM);
     }
-    await store.setValue(STORE_KEY, trimmed);
+    await writeFile(STATE_FILE, JSON.stringify(trimmed, null, 2), 'utf-8');
 }
