@@ -1,22 +1,10 @@
-// src/browser.js
-import { PlaywrightCrawler, ProxyConfiguration } from 'crawlee';
-import { Actor } from 'apify';
-
-export async function createBrowser() {
-    const proxyConfiguration = await Actor.createProxyConfiguration({
-        groups: ['RESIDENTIAL'],
-    });
-
-    return { proxyConfiguration };
-}
+import { PlaywrightCrawler } from 'crawlee';
 
 export async function fetchPageWithRetry(url, extractFn, options = {}) {
-    const { proxyConfiguration } = await createBrowser();
     let result = null;
     let error = null;
 
     const crawler = new PlaywrightCrawler({
-        proxyConfiguration,
         maxRequestRetries: 3,
         requestHandlerTimeoutSecs: 60,
         launchContext: {
@@ -29,14 +17,11 @@ export async function fetchPageWithRetry(url, extractFn, options = {}) {
             await page.waitForLoadState('networkidle', { timeout: 30000 });
             result = await extractFn(page, request.url);
         },
-        async failedRequestHandler({ request }, err) {
-            error = err;
-        },
+        async failedRequestHandler({ request }, err) { error = err; },
         ...options,
     });
 
     await crawler.run([url]);
-
     if (error && !result) throw error;
     return result || [];
 }
