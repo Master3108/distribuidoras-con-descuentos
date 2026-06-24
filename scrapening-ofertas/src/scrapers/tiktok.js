@@ -1,11 +1,15 @@
 import { fetchPageWithRetry } from '../browser.js';
 
 export function buildTikTokOutput(data) {
+    const author = data.author || 'unknown';
+    const videoUrl = author !== 'unknown'
+        ? `https://www.tiktok.com/@${author}/video/${data.id}`
+        : `https://www.tiktok.com/video/${data.id}`;
     return {
         id: data.id,
-        url: `https://www.tiktok.com/@${data.author}/video/${data.id}`,
+        url: videoUrl,
         plataforma: 'tiktok',
-        cuenta: `@${data.author}`,
+        cuenta: `@${author}`,
         descripcion: (data.desc || '').slice(0, 500),
         fecha: new Date(data.createTime * 1000).toISOString().slice(0, 10),
         miniatura_url: data.video?.cover || '',
@@ -51,11 +55,14 @@ export async function scrapeTikTokAccount(handle, maxResults) {
 export async function scrapeTikTokHashtag(hashtag, maxResults) {
     const url = `https://www.tiktok.com/tag/${encodeURIComponent(hashtag)}`;
     const items = await fetchPageWithRetry(url, extractTikTokVideos);
-    return items.slice(0, maxResults).map(item => buildTikTokOutput({
-        id: item.id,
-        author: item.author?.uniqueId || 'unknown',
-        desc: item.desc,
-        createTime: item.createTime,
-        video: item.video,
-    }));
+    return items
+        .slice(0, maxResults)
+        .filter(item => item.id && (item.author?.uniqueId || item.authorId))
+        .map(item => buildTikTokOutput({
+            id: item.id,
+            author: item.author?.uniqueId || item.authorId || 'unknown',
+            desc: item.desc,
+            createTime: item.createTime,
+            video: item.video,
+        }));
 }

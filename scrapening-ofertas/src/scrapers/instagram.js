@@ -36,7 +36,8 @@ async function extractInstagramPosts(page) {
 }
 
 export async function scrapeInstagramAccount(handle, maxResults) {
-    const url = `https://www.instagram.com/${handle}/reels/`;
+    // Target the main feed (all posts) instead of /reels/ only
+    const url = `https://www.instagram.com/${handle}/`;
     const items = await fetchPageWithRetry(url, extractInstagramPosts);
     return items.slice(0, maxResults).map(buildInstagramOutput);
 }

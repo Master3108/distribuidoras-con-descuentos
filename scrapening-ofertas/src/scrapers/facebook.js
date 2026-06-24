@@ -20,19 +20,41 @@ async function extractFacebookReels(page) {
     await page.waitForTimeout(4000);
 
     const data = await page.evaluate(() => {
+        const results = [];
         try {
             const scripts = Array.from(document.querySelectorAll('script[type="application/json"]'));
             for (const script of scripts) {
-                const json = JSON.parse(script.textContent);
-                // Facebook usa Relay: busca arrays de nodos de video
+                let json;
+                try { json = JSON.parse(script.textContent); } catch { continue; }
+
                 const str = JSON.stringify(json);
-                if (str.includes('playable_url')) {
-                    const matches = str.match(/"id":"(\d+)"[^}]*"playable_url":"([^"]+)"/g);
-                    if (matches?.length) return [{ id: 'found', raw: matches }];
+                if (!str.includes('playable_url')) continue;
+
+                // Walk the JSON tree looking for objects with playable_url
+                function walk(obj) {
+                    if (!obj || typeof obj !== 'object') return;
+                    if (Array.isArray(obj)) { obj.forEach(walk); return; }
+                    if (obj.playable_url && obj.id) {
+                        results.push({
+                            id: String(obj.id),
+                            url: obj.permalink_url || null,
+                            owner: obj.owner || obj.video_owner || null,
+                            pageName: null,
+                            message: obj.message || null,
+                            description: obj.description?.text || obj.title?.text || '',
+                            creation_time: obj.publish_time || obj.creation_time || null,
+                            thumbnailImage: obj.thumbnailImage || obj.preferred_thumbnail || null,
+                            playable_url: obj.playable_url,
+                            source: null,
+                        });
+                        return;
+                    }
+                    Object.values(obj).forEach(walk);
                 }
+                walk(json);
             }
         } catch {}
-        return [];
+        return results;
     });
 
     return data || [];
