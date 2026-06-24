@@ -19,9 +19,9 @@ export async function fetchPageWithRetry(url, extractFn, options = {}) {
         proxyConfiguration,
         maxRequestRetries: 3,
         requestHandlerTimeoutSecs: 60,
-        headless: true,
         launchContext: {
             launchOptions: {
+                headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox'],
             },
         },

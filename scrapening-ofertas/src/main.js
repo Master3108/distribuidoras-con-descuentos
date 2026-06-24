@@ -28,6 +28,10 @@ for (const platform of PLATFORMS) {
 let processedIds = await loadProcessedIds();
 let newItemsCount = 0;
 
+// Load and update last run timestamp for YouTube date filtering
+const metaStore = await Actor.openKeyValueStore('scrapening-meta');
+const lastRunDate = await metaStore.getValue('last_run_date');
+
 async function pushIfNew(item) {
     if (!item.id) return;
     if (!isNew(processedIds, item.plataforma, item.id)) return;
@@ -83,7 +87,7 @@ if (youtubeApiKey) {
     console.log('Scraping YouTube keywords...');
     for (const keyword of DEFAULT_HASHTAGS.youtube) {
         try {
-            const items = await scrapeYoutubeByKeyword(youtubeApiKey, keyword, maxResultsPerSource);
+            const items = await scrapeYoutubeByKeyword(youtubeApiKey, keyword, maxResultsPerSource, lastRunDate);
             for (const item of items) await pushIfNew(item);
         } catch (e) {
             console.error(`YouTube keyword "${keyword}" error:`, e.message);
@@ -93,7 +97,7 @@ if (youtubeApiKey) {
     console.log('Scraping YouTube canales...');
     for (const channel of allCuentas.youtube || []) {
         try {
-            const items = await scrapeYoutubeByChannel(youtubeApiKey, channel, maxResultsPerSource);
+            const items = await scrapeYoutubeByChannel(youtubeApiKey, channel, maxResultsPerSource, lastRunDate);
             for (const item of items) await pushIfNew(item);
         } catch (e) {
             console.error(`YouTube canal "${channel}" error:`, e.message);
@@ -126,6 +130,7 @@ for (const keyword of DEFAULT_HASHTAGS.facebook) {
 
 // ── Guardar IDs procesados ───────────────────────────
 await saveProcessedIds(processedIds);
+await metaStore.setValue('last_run_date', new Date().toISOString());
 console.log(`✅ scrapening-ofertas completado. ${newItemsCount} nuevos items encontrados.`);
 
 await Actor.exit();
