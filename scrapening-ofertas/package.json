@@ -6,7 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "test": "jest --experimental-vm-modules",
+    "test": "jest",
     "dev": "apify run"
   },
   "dependencies": {
