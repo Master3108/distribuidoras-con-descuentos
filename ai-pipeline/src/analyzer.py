@@ -1,8 +1,7 @@
-import base64
 import json
 import os
 import re
-import anthropic
+import google.generativeai as genai
 from src.models import VideoRecord, Dazo
 
 
@@ -33,17 +32,8 @@ Responde SOLO con JSON válido, sin texto adicional:
 Si no hay precio de referencia, usa null para precio_supermercado y ahorro_porcentaje."""
 
 
-def _encode_image(path: str) -> dict:
-    with open(path, 'rb') as f:
-        data = base64.standard_b64encode(f.read()).decode('utf-8')
-    return {
-        'type': 'image',
-        'source': {'type': 'base64', 'media_type': 'image/jpeg', 'data': data},
-    }
-
-
 def parse_analysis_response(text: str, video: VideoRecord) -> list[Dazo]:
-    """Parsea el JSON devuelto por Claude. Devuelve lista de Dazo (puede ser vacía)."""
+    """Parsea el JSON devuelto por Gemini. Devuelve lista de Dazo (puede ser vacía)."""
     text = re.sub(r'```(?:json)?\s*', '', text).strip()
     try:
         parsed = json.loads(text)
@@ -76,21 +66,29 @@ def parse_analysis_response(text: str, video: VideoRecord) -> list[Dazo]:
 
 
 def analyze_video(frames: list[str], transcript: str, video: VideoRecord) -> list[Dazo]:
-    """Envía frames + transcript a Claude Vision. Devuelve lista de Dazo."""
-    client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
+    """Envía frames + transcript a Gemini Vision. Devuelve lista de Dazo."""
+    genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
-    content = [_encode_image(f) for f in frames if os.path.exists(f)]
-    content.append({'type': 'text', 'text': PROMPT_TEMPLATE.format(
+    parts = []
+    for frame_path in frames:
+        if os.path.exists(frame_path):
+            with open(frame_path, 'rb') as f:
+                data = f.read()
+            parts.append(genai.protos.Part(
+                inline_data=genai.protos.Blob(
+                    mime_type='image/jpeg',
+                    data=data,
+                )
+            ))
+
+    parts.append(PROMPT_TEMPLATE.format(
         plataforma=video.plataforma,
         cuenta=video.cuenta,
         descripcion=video.descripcion[:300],
         url=video.url,
         transcript=transcript or '(sin audio disponible)',
-    )})
+    ))
 
-    response = client.messages.create(
-        model='claude-sonnet-4-6',
-        max_tokens=2000,
-        messages=[{'role': 'user', 'content': content}],
-    )
-    return parse_analysis_response(response.content[0].text, video)
+    response = model.generate_content(parts)
+    return parse_analysis_response(response.text, video)
