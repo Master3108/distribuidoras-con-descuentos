@@ -1,7 +1,8 @@
 import json
 import os
 import re
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from src.models import VideoRecord, Dazo
 
 
@@ -67,20 +68,14 @@ def parse_analysis_response(text: str, video: VideoRecord) -> list[Dazo]:
 
 def analyze_video(frames: list[str], transcript: str, video: VideoRecord) -> list[Dazo]:
     """Envía frames + transcript a Gemini Vision. Devuelve lista de Dazo."""
-    genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    client = genai.Client(api_key=os.environ['GOOGLE_API_KEY'])
 
     parts = []
     for frame_path in frames:
         if os.path.exists(frame_path):
             with open(frame_path, 'rb') as f:
                 data = f.read()
-            parts.append(genai.protos.Part(
-                inline_data=genai.protos.Blob(
-                    mime_type='image/jpeg',
-                    data=data,
-                )
-            ))
+            parts.append(types.Part.from_bytes(data=data, mime_type='image/jpeg'))
 
     parts.append(PROMPT_TEMPLATE.format(
         plataforma=video.plataforma,
@@ -90,5 +85,8 @@ def analyze_video(frames: list[str], transcript: str, video: VideoRecord) -> lis
         transcript=transcript or '(sin audio disponible)',
     ))
 
-    response = model.generate_content(parts)
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=parts,
+    )
     return parse_analysis_response(response.text, video)
