@@ -1,12 +1,13 @@
+import base64
 import json
 import os
 import re
 
-from google import genai
-from google.genai import types
 from src.models import VideoRecord, Dazo
 
-VISION_MODEL = os.environ.get('GOOGLE_VISION_MODEL', 'gemini-2.0-flash')
+# Visión con OpenAI (gpt-4o-mini por defecto). Se usa OpenAI porque es la key
+# disponible; para cambiar a Gemini bastaría re-implementar este módulo + key.
+VISION_MODEL = os.environ.get('OPENAI_VISION_MODEL', 'gpt-4o-mini')
 
 PROMPT_TEMPLATE = """Analiza este contenido de redes sociales chilenas.
 
@@ -38,6 +39,8 @@ Deja precio_supermercado y ahorro_porcentaje en null (se calculan después con d
 
 
 def parse_analysis_response(text: str, video: VideoRecord) -> list[Dazo]:
+    """Parsea el JSON del modelo. Tolera: objeto {datazos:[...]}, {es_dazo:false},
+    un dazo suelto, o un array (formato heredado). Devuelve lista de Dazo."""
     text = re.sub(r'```(?:json)?\s*', '', text or '').strip()
     try:
         parsed = json.loads(text)
@@ -75,32 +78,32 @@ def parse_analysis_response(text: str, video: VideoRecord) -> list[Dazo]:
 
 
 def analyze_video(frames: list[str], transcript: str, video: VideoRecord) -> list[Dazo]:
-    key = os.environ.get('GOOGLE_API_KEY')
+    """Envía frames + transcripción a OpenAI Vision. Devuelve lista de Dazo."""
+    key = os.environ.get('OPENAI_API_KEY')
     if not key or not frames:
         return []
+    from openai import OpenAI  # import lazy: el parser no requiere openai instalado
+    client = OpenAI(api_key=key)
 
-    client = genai.Client(api_key=key)
-    parts = []
+    content = [{'type': 'text', 'text': PROMPT_TEMPLATE.format(
+        plataforma=video.plataforma, cuenta=video.cuenta,
+        descripcion=video.descripcion[:300], url=video.url,
+        transcript=transcript or '(sin audio disponible)',
+    )}]
     for frame_path in frames[:4]:
         if os.path.exists(frame_path):
             with open(frame_path, 'rb') as f:
-                data = f.read()
-            parts.append(types.Part.from_bytes(data=data, mime_type='image/jpeg'))
-
-    parts.append(PROMPT_TEMPLATE.format(
-        plataforma=video.plataforma,
-        cuenta=video.cuenta,
-        descripcion=video.descripcion[:300],
-        url=video.url,
-        transcript=transcript or '(sin audio disponible)',
-    ))
+                b64 = base64.b64encode(f.read()).decode()
+            content.append({'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{b64}'}})
 
     try:
-        response = client.models.generate_content(
+        resp = client.chat.completions.create(
             model=VISION_MODEL,
-            contents=parts,
+            temperature=0,
+            response_format={'type': 'json_object'},
+            messages=[{'role': 'user', 'content': content}],
         )
-        return parse_analysis_response(response.text, video)
+        return parse_analysis_response(resp.choices[0].message.content, video)
     except Exception as e:
-        print(f'  análisis Gemini falló: {e}')
+        print(f'  análisis OpenAI falló: {e}')
         return []

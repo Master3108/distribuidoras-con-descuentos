@@ -1,13 +1,18 @@
 import os
-import dotenv
-dotenv.load_dotenv()
+try:
+    import dotenv
+    dotenv.load_dotenv()
+except ModuleNotFoundError:
+    pass
 
-from src.models import VideoRecord
+from src.models import VideoRecord, enriquecer_precio_supermercado, enriquecer_local
 from src.storage import fetch_unprocessed_videos, mark_video_processed, save_dazo, upload_frame
 from src.downloader import download_thumbnail, download_video, cleanup
 from src.extractor import frames_from_image, frames_from_video
 from src.transcriber import transcribe_audio
 from src.analyzer import analyze_video
+from src.precio_referencia import precio_referencia
+from src.enriquecimiento import buscar_local
 
 BATCH_SIZE = int(os.environ.get('BATCH_SIZE', '10'))
 
@@ -37,8 +42,18 @@ def process_video(video: VideoRecord) -> int:
             print(f'  Sin frames para {video.id} — saltando')
             return 0
 
-        # 3. Analizar con Claude Vision
+        # 3. Analizar con Gemini Vision
         datazos = analyze_video(frames, transcript, video)
+
+        # 3b. Enriquecer con el precio REAL de supermercado (extractor Node) y
+        #     recalcular el ahorro. Si no se encuentra, se conserva la estimación.
+        for dazo in datazos:
+            enriquecer_precio_supermercado(dazo, precio_referencia)
+
+        # 3c. Enriquecer datos del local (dirección, teléfono, horario, Maps).
+        #     Si no hay dirección, el dazo queda 'incompleto' y no se publica solo.
+        for dazo in datazos:
+            enriquecer_local(dazo, buscar_local)
 
         # 4. Subir foto del producto y guardar cada dazo
         for dazo in datazos:
